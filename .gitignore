@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Environnements virtuels
+.venv/
+venv/
+
+# Fichiers temporaires
+*.tmp
+*.log
+
+# Configuration locale
