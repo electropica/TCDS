@@ -8,38 +8,38 @@ import sys
 import time
 from pathlib import Path
 
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 NETWORK_MODULE = PROJECT_ROOT / "src" / "network"
+IDENTITY_MODULE = PROJECT_ROOT / "src" / "identity"
 
 if str(NETWORK_MODULE) not in sys.path:
     sys.path.insert(0, str(NETWORK_MODULE))
 
+if str(IDENTITY_MODULE) not in sys.path:
+    sys.path.insert(0, str(IDENTITY_MODULE))
+
 import tcds_network
+import tcds_identity
 
 
 CONFIG_FILE = "/etc/tcds/tcds.conf"
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 
 def load_config():
     config = configparser.ConfigParser()
 
-    if not config.read(CONFIG_FILE):
-        raise FileNotFoundError(
-            f"Configuration introuvable : {CONFIG_FILE}"
-        )
+    if Path(CONFIG_FILE).exists():
+        config.read(CONFIG_FILE)
 
     return config
 
 
 def setup_logging(config):
-    log_level = config.get(
-        "core",
-        "log_level",
-        fallback="INFO"
-    ).upper()
-
-    level = getattr(logging, log_level, logging.INFO)
+    level_name = config.get("core", "log_level", fallback="INFO")
+    level = getattr(logging, level_name.upper(), logging.INFO)
 
     logging.basicConfig(
         level=level,
@@ -52,39 +52,44 @@ def get_system_info():
         "hostname": socket.gethostname(),
         "architecture": platform.machine(),
         "kernel": platform.release(),
-        "python": platform.python_version(),
+        "python": platform.python_version()
     }
+
+
+def log_identity(logger):
+    identity = tcds_identity.get_identity()
+
+    if not identity:
+        logger.error("Identité du terminal indisponible")
+        return None
+
+    logger.info("Terminal : %s", identity["name"])
+    logger.info("MAC : %s", identity["mac"])
+
+    return identity
 
 
 def log_network_status(logger):
     status = tcds_network.get_network_status()
 
-    logger.info(
-        "Réseau : %s",
-        "disponible" if status["network_available"] else "indisponible"
-    )
+    if status["network_available"]:
+        logger.info("Réseau : disponible")
+    else:
+        logger.warning("Réseau : indisponible")
 
     for interface in status["active_interfaces"]:
-        logger.info(
-            "Interface : %s",
-            interface["name"]
-        )
+        logger.info("Interface : %s", interface["name"])
 
         for address in interface["addresses"]:
-            logger.info(
-                "Adresse : %s",
-                address
-            )
+            logger.info("Adresse : %s", address)
 
-    logger.info(
-        "Passerelle : %s",
-        status["gateway"] or "aucune"
-    )
+    logger.info("Passerelle : %s", status["gateway"] or "aucune")
 
-    logger.info(
-        "DNS : %s",
-        ", ".join(status["dns_servers"]) or "aucun"
-    )
+    if status["dns_servers"]:
+        for dns in status["dns_servers"]:
+            logger.info("DNS : %s", dns)
+    else:
+        logger.info("DNS : aucun")
 
 
 def main():
@@ -93,23 +98,23 @@ def main():
 
     logger = logging.getLogger("tcds-core")
 
-    version = config.get(
-        "core",
-        "version",
-        fallback=VERSION
-    )
+    logger.info("TCDS Core %s démarrage", VERSION)
 
-    logger.info("TCDS Core %s démarrage", version)
+    system = get_system_info()
 
-    info = get_system_info()
-
-    for key, value in info.items():
+    for key, value in system.items():
         logger.info("%s: %s", key, value)
+
+    identity = log_identity(logger)
+
+    if not identity:
+        logger.error("TCDS Core ne peut pas continuer sans identité")
+        return 1
 
     network_enabled = config.getboolean(
         "network",
         "enabled",
-        fallback=False
+        fallback=True
     )
 
     session_enabled = config.getboolean(
@@ -144,9 +149,15 @@ def main():
 
     logger.info("TCDS Core actif")
 
-    while True:
-        time.sleep(30)
+    try:
+        while True:
+            time.sleep(30)
+
+    except KeyboardInterrupt:
+        logger.info("Arrêt de TCDS Core")
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
