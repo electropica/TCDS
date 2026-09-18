@@ -4,10 +4,21 @@ import configparser
 import logging
 import platform
 import socket
+import sys
 import time
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+NETWORK_MODULE = PROJECT_ROOT / "src" / "network"
+
+if str(NETWORK_MODULE) not in sys.path:
+    sys.path.insert(0, str(NETWORK_MODULE))
+
+import tcds_network
+
 
 CONFIG_FILE = "/etc/tcds/tcds.conf"
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 
 def load_config():
@@ -43,6 +54,37 @@ def get_system_info():
         "kernel": platform.release(),
         "python": platform.python_version(),
     }
+
+
+def log_network_status(logger):
+    status = tcds_network.get_network_status()
+
+    logger.info(
+        "Réseau : %s",
+        "disponible" if status["network_available"] else "indisponible"
+    )
+
+    for interface in status["active_interfaces"]:
+        logger.info(
+            "Interface : %s",
+            interface["name"]
+        )
+
+        for address in interface["addresses"]:
+            logger.info(
+                "Adresse : %s",
+                address
+            )
+
+    logger.info(
+        "Passerelle : %s",
+        status["gateway"] or "aucune"
+    )
+
+    logger.info(
+        "DNS : %s",
+        ", ".join(status["dns_servers"]) or "aucun"
+    )
 
 
 def main():
@@ -82,9 +124,23 @@ def main():
         fallback=False
     )
 
-    logger.info("Réseau : %s", "activé" if network_enabled else "désactivé")
-    logger.info("Session : %s", "activée" if session_enabled else "désactivée")
-    logger.info("Interface : %s", "activée" if ui_enabled else "désactivée")
+    logger.info(
+        "Réseau : %s",
+        "activé" if network_enabled else "désactivé"
+    )
+
+    logger.info(
+        "Session : %s",
+        "activée" if session_enabled else "désactivée"
+    )
+
+    logger.info(
+        "Interface : %s",
+        "activée" if ui_enabled else "désactivée"
+    )
+
+    if network_enabled:
+        log_network_status(logger)
 
     logger.info("TCDS Core actif")
 
