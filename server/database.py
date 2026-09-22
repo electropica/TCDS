@@ -32,4 +32,18 @@ def init_database():
             """
         )
 
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS terminal_config (
+                terminal_id TEXT PRIMARY KEY,
+                config_version INTEGER NOT NULL DEFAULT 1,
+                config_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (terminal_id)
+                    REFERENCES terminals(terminal_id)
+                    ON DELETE CASCADE
+            )
+            """
+        )
+
         connection.commit()
