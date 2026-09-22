@@ -6,7 +6,7 @@ import socket
 import sys
 import time
 
-sys.path.insert(0, "/opt/tcds/source/identity")
+sys.path.insert(0, "/opt/tcds/identity")
 
 from identity import get_identity
 

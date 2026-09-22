@@ -26,18 +26,24 @@ $SSH "$TARGET" "sudo mkdir -p /opt/tcds/{core,client,identity,config,logs}"
 echo "[TCDS] Copie du Core..."
 $SCP core/tcds_core.py "$TARGET:/tmp/tcds_core.py"
 
+echo "[TCDS] Copie du Client..."
+$SCP client/tcds_client.py "$TARGET:/tmp/tcds_client.py"
+
 echo "[TCDS] Copie de l'Identity..."
 $SCP identity/identity.py "$TARGET:/tmp/identity.py"
 
 echo "[TCDS] Installation..."
 $SSH "$TARGET" '
     sudo mv /tmp/tcds_core.py /opt/tcds/core/tcds_core.py
+    sudo mv /tmp/tcds_client.py /opt/tcds/client/tcds_client.py
     sudo mv /tmp/identity.py /opt/tcds/identity/identity.py
 
     sudo chown root:root /opt/tcds/core/tcds_core.py
+    sudo chown root:root /opt/tcds/client/tcds_client.py
     sudo chown root:root /opt/tcds/identity/identity.py
 
     sudo chmod 755 /opt/tcds/core/tcds_core.py
+    sudo chmod 755 /opt/tcds/client/tcds_client.py
     sudo chmod 755 /opt/tcds/identity/identity.py
 '
 
