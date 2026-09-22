@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 
 from datetime import datetime, timezone
 
@@ -9,6 +10,12 @@ from server.database import get_connection, init_database
 
 VERSION = "0.1.0"
 ONLINE_TIMEOUT = 90
+
+DEFAULT_CONFIG = {
+    "log_level": "INFO",
+    "session_enabled": False,
+    "ui_enabled": False,
+}
 
 app = FastAPI(
     title="TCDS Server",
@@ -83,6 +90,26 @@ def register_terminal(terminal: TerminalRegistration):
                 terminal_data["client_version"],
                 terminal_data["last_seen"],
                 1,
+            ),
+        )
+
+        connection.commit()
+
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO terminal_config (
+                terminal_id,
+                config_version,
+                config_json,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                terminal_data["terminal_id"],
+                1,
+                json.dumps(DEFAULT_CONFIG),
+                terminal_data["last_seen"],
             ),
         )
 
