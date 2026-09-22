@@ -29,6 +29,9 @@ $SCP core/tcds_core.py "$TARGET:/tmp/tcds_core.py"
 echo "[TCDS] Copie du Client..."
 $SCP client/tcds_client.py "$TARGET:/tmp/tcds_client.py"
 
+echo "[TCDS] Copie du service systemd Client..."
+$SCP config/systemd/tcds-client.service "$TARGET:/tmp/tcds-client.service"
+
 echo "[TCDS] Copie de l'Identity..."
 $SCP identity/identity.py "$TARGET:/tmp/identity.py"
 
@@ -36,6 +39,8 @@ echo "[TCDS] Installation..."
 $SSH "$TARGET" '
     sudo mv /tmp/tcds_core.py /opt/tcds/core/tcds_core.py
     sudo mv /tmp/tcds_client.py /opt/tcds/client/tcds_client.py
+    sudo mv /tmp/tcds-client.service /etc/systemd/system/tcds-client.service
+
     sudo mv /tmp/identity.py /opt/tcds/identity/identity.py
 
     sudo chown root:root /opt/tcds/core/tcds_core.py
@@ -44,7 +49,13 @@ $SSH "$TARGET" '
 
     sudo chmod 755 /opt/tcds/core/tcds_core.py
     sudo chmod 755 /opt/tcds/client/tcds_client.py
+    sudo chmod 644 /etc/systemd/system/tcds-client.service
+
     sudo chmod 755 /opt/tcds/identity/identity.py
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now tcds-client.service
+
 '
 
 echo "[TCDS] Déploiement terminé."
