@@ -11,3 +11,5 @@ venv/
 *.log
 
 # Configuration locale
+
+config/tcds-client.conf
