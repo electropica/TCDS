@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from server.database import get_connection, init_database
+
 VERSION = "0.1.0"
 
 app = FastAPI(
     title="TCDS Server",
     version=VERSION,
 )
-
-terminals = {}
 
 
 class TerminalRegistration(BaseModel):
@@ -22,6 +22,11 @@ class TerminalRegistration(BaseModel):
     ip_address: str
     architecture: str
     client_version: str
+
+
+@app.on_event("startup")
+def startup():
+    init_database()
 
 
 @app.get("/api/v1/status")
@@ -39,7 +44,42 @@ def register_terminal(terminal: TerminalRegistration):
     terminal_data["last_seen"] = datetime.now(timezone.utc).isoformat()
     terminal_data["online"] = True
 
-    terminals[terminal.terminal_id] = terminal_data
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO terminals (
+                terminal_id,
+                hostname,
+                mac_address,
+                ip_address,
+                architecture,
+                client_version,
+                last_seen,
+                online
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(terminal_id) DO UPDATE SET
+                hostname = excluded.hostname,
+                mac_address = excluded.mac_address,
+                ip_address = excluded.ip_address,
+                architecture = excluded.architecture,
+                client_version = excluded.client_version,
+                last_seen = excluded.last_seen,
+                online = excluded.online
+            """,
+            (
+                terminal_data["terminal_id"],
+                terminal_data["hostname"],
+                terminal_data["mac_address"],
+                terminal_data["ip_address"],
+                terminal_data["architecture"],
+                terminal_data["client_version"],
+                terminal_data["last_seen"],
+                1,
+            ),
+        )
+
+        connection.commit()
 
     return {
         "status": "registered",
@@ -49,35 +89,67 @@ def register_terminal(terminal: TerminalRegistration):
 
 @app.post("/api/v1/terminals/{terminal_id}/heartbeat")
 def heartbeat(terminal_id: str):
-    if terminal_id not in terminals:
-        raise HTTPException(
-            status_code=404,
-            detail="Terminal not registered",
+    last_seen = datetime.now(timezone.utc).isoformat()
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE terminals
+            SET last_seen = ?, online = 1
+            WHERE terminal_id = ?
+            """,
+            (last_seen, terminal_id),
         )
 
-    terminals[terminal_id]["last_seen"] = datetime.now(timezone.utc).isoformat()
-    terminals[terminal_id]["online"] = True
+        connection.commit()
+
+        if cursor.rowcount == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="Terminal not registered",
+            )
 
     return {
         "status": "ok",
         "terminal_id": terminal_id,
-        "last_seen": terminals[terminal_id]["last_seen"],
+        "last_seen": last_seen,
     }
 
 
 @app.get("/api/v1/terminals")
 def list_terminals():
+    with get_connection() as connection:
+        rows = connection.execute(
+            "SELECT * FROM terminals ORDER BY terminal_id"
+        ).fetchall()
+
+    terminals = []
+
+    for row in rows:
+        terminal = dict(row)
+        terminal["online"] = bool(terminal["online"])
+        terminals.append(terminal)
+
     return {
-        "terminals": list(terminals.values()),
+        "terminals": terminals,
     }
 
 
 @app.get("/api/v1/terminals/{terminal_id}")
 def get_terminal(terminal_id: str):
-    if terminal_id not in terminals:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT * FROM terminals WHERE terminal_id = ?",
+            (terminal_id,),
+        ).fetchone()
+
+    if row is None:
         raise HTTPException(
             status_code=404,
             detail="Terminal not registered",
         )
 
-    return terminals[terminal_id]
+    terminal = dict(row)
+    terminal["online"] = bool(terminal["online"])
+
+    return terminal
