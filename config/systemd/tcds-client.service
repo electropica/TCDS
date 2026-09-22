@@ -1,0 +1,15 @@
+[Unit]
+Description=TCDS Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tcds
+Group=tcds
+ExecStart=/opt/tcds/client/tcds_client.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
