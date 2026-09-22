@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from server.database import get_connection, init_database
 
 VERSION = "0.1.0"
+ONLINE_TIMEOUT = 90
 
 app = FastAPI(
     title="TCDS Server",
@@ -22,6 +23,12 @@ class TerminalRegistration(BaseModel):
     ip_address: str
     architecture: str
     client_version: str
+
+
+def is_terminal_online(last_seen):
+    last_seen_time = datetime.fromisoformat(last_seen)
+    elapsed = (datetime.now(timezone.utc) - last_seen_time).total_seconds()
+    return elapsed < ONLINE_TIMEOUT
 
 
 @app.on_event("startup")
@@ -127,7 +134,7 @@ def list_terminals():
 
     for row in rows:
         terminal = dict(row)
-        terminal["online"] = bool(terminal["online"])
+        terminal["online"] = is_terminal_online(terminal["last_seen"])
         terminals.append(terminal)
 
     return {
@@ -150,6 +157,6 @@ def get_terminal(terminal_id: str):
         )
 
     terminal = dict(row)
-    terminal["online"] = bool(terminal["online"])
+    terminal["online"] = is_terminal_online(terminal["last_seen"])
 
     return terminal
