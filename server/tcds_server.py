@@ -187,3 +187,28 @@ def get_terminal(terminal_id: str):
     terminal["online"] = is_terminal_online(terminal["last_seen"])
 
     return terminal
+
+
+@app.get("/api/v1/terminals/{terminal_id}/config")
+def get_terminal_config(terminal_id: str):
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT terminal_id, config_version, config_json
+            FROM terminal_config
+            WHERE terminal_id = ?
+            """,
+            (terminal_id,),
+        ).fetchone()
+
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Configuration not found",
+        )
+
+    return {
+        "terminal_id": row["terminal_id"],
+        "config_version": row["config_version"],
+        "settings": json.loads(row["config_json"]),
+    }
