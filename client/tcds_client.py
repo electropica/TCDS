@@ -18,6 +18,7 @@ from identity import get_identity
 VERSION = "0.1.0"
 
 CONFIG_FILE = "/opt/tcds/config/tcds-client.conf"
+LOCAL_CONFIG_FILE = "/opt/tcds/config/tcds-config.json"
 HEARTBEAT_INTERVAL = 30
 
 logging.basicConfig(
@@ -110,6 +111,27 @@ def register(
     log.info("Registration OK: %s", body)
 
 
+def get_remote_config(server_url, terminal_id):
+    request = urllib.request.Request(
+        f"{server_url}/api/v1/terminals/{terminal_id}/config",
+        method="GET",
+    )
+
+    with urllib.request.urlopen(request, timeout=10) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def save_local_config(config):
+    with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as file:
+        json.dump(config, file, indent=2)
+        file.write("\n")
+
+    log.info(
+        "Configuration locale sauvegardée: version=%s",
+        config.get("config_version"),
+    )
+
+
 def heartbeat(server_url, terminal_id):
     request = urllib.request.Request(
         f"{server_url}/api/v1/terminals/{terminal_id}/heartbeat",
@@ -158,6 +180,14 @@ def main():
 
         log.info("Retrying registration in %d seconds", HEARTBEAT_INTERVAL)
         time.sleep(HEARTBEAT_INTERVAL)
+
+    try:
+        config = get_remote_config(server_url, identity)
+        save_local_config(config)
+    except urllib.error.URLError as error:
+        log.error("Configuration retrieval failed: %s", error)
+    except Exception as error:
+        log.error("Configuration retrieval failed: %s", error)
 
     while True:
         time.sleep(HEARTBEAT_INTERVAL)
