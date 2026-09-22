@@ -1,0 +1,14 @@
+[Unit]
+Description=TCDS Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tcds/source
+ExecStart=/opt/tcds/source/.venv/bin/uvicorn server.tcds_server:app --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
