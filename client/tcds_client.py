@@ -173,6 +173,8 @@ def heartbeat(server_url, terminal_id):
         body.get("last_seen"),
     )
 
+    return body
+
 
 def main():
     hostname = socket.gethostname()
@@ -212,16 +214,35 @@ def main():
         config = get_remote_config(server_url, identity)
         save_local_config(config)
         apply_config(config)
+        config_version = config.get("config_version")
     except urllib.error.URLError as error:
         log.error("Configuration retrieval failed: %s", error)
+        config_version = None
     except Exception as error:
         log.error("Configuration retrieval failed: %s", error)
+        config_version = None
 
     while True:
         time.sleep(HEARTBEAT_INTERVAL)
 
         try:
-            heartbeat(server_url, identity)
+            heartbeat_data = heartbeat(server_url, identity)
+            remote_config_version = heartbeat_data.get("config_version")
+
+            if (
+                remote_config_version is not None
+                and remote_config_version != config_version
+            ):
+                log.info(
+                    "Nouvelle configuration détectée: version=%s",
+                    remote_config_version,
+                )
+
+                config = get_remote_config(server_url, identity)
+                save_local_config(config)
+                apply_config(config)
+                config_version = config.get("config_version")
+
         except urllib.error.URLError as error:
             log.error("Heartbeat failed: %s", error)
         except Exception as error:
