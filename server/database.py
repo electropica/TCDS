@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 DATABASE_FILE = Path("/opt/tcds/data/tcds.db")
 
 
+@contextmanager
 def get_connection():
     DATABASE_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     connection = sqlite3.connect(DATABASE_FILE)
     connection.row_factory = sqlite3.Row
 
-    return connection
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 def init_database():
