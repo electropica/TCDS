@@ -121,6 +121,28 @@ def get_remote_config(server_url, terminal_id):
         return json.loads(response.read().decode("utf-8"))
 
 
+def load_local_config():
+    try:
+        with open(LOCAL_CONFIG_FILE, "r", encoding="utf-8") as file:
+            config = json.load(file)
+    except FileNotFoundError:
+        log.info("Aucune configuration locale disponible")
+        return None
+    except (OSError, json.JSONDecodeError) as error:
+        log.warning(
+            "Impossible de charger la configuration locale: %s",
+            error,
+        )
+        return None
+
+    log.info(
+        "Configuration locale chargée: version=%s",
+        config.get("config_version"),
+    )
+
+    return config
+
+
 def save_local_config(config):
     with open(LOCAL_CONFIG_FILE, "w", encoding="utf-8") as file:
         json.dump(config, file, indent=2)
@@ -192,6 +214,13 @@ def main():
     log.info("Kernel: %s", platform.release())
     log.info("Server: %s", server_url)
 
+    local_config = load_local_config()
+    config_version = None
+
+    if local_config is not None:
+        apply_config(local_config)
+        config_version = local_config.get("config_version")
+
     while True:
         try:
             register(
@@ -217,10 +246,8 @@ def main():
         config_version = config.get("config_version")
     except urllib.error.URLError as error:
         log.error("Configuration retrieval failed: %s", error)
-        config_version = None
     except Exception as error:
         log.error("Configuration retrieval failed: %s", error)
-        config_version = None
 
     while True:
         time.sleep(HEARTBEAT_INTERVAL)
