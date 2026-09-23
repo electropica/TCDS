@@ -135,18 +135,34 @@ def heartbeat(terminal_id: str):
             (last_seen, terminal_id),
         )
 
-        connection.commit()
-
         if cursor.rowcount == 0:
             raise HTTPException(
                 status_code=404,
                 detail="Terminal not registered",
             )
 
+        config_row = connection.execute(
+            """
+            SELECT config_version
+            FROM terminal_config
+            WHERE terminal_id = ?
+            """,
+            (terminal_id,),
+        ).fetchone()
+
+        connection.commit()
+
+    if config_row is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Configuration not found",
+        )
+
     return {
         "status": "ok",
         "terminal_id": terminal_id,
         "last_seen": last_seen,
+        "config_version": config_row["config_version"],
     }
 
 
