@@ -17,6 +17,14 @@ DEFAULT_CONFIG = {
     "ui_enabled": False,
 }
 
+VALID_LOG_LEVELS = {
+    "DEBUG",
+    "INFO",
+    "WARNING",
+    "ERROR",
+    "CRITICAL",
+}
+
 app = FastAPI(
     title="TCDS Server",
     version=VERSION,
@@ -32,10 +40,35 @@ class TerminalRegistration(BaseModel):
     client_version: str
 
 
+class TerminalConfigUpdate(BaseModel):
+    log_level: str
+    session_enabled: bool
+    ui_enabled: bool
+
+
 def is_terminal_online(last_seen):
     last_seen_time = datetime.fromisoformat(last_seen)
-    elapsed = (datetime.now(timezone.utc) - last_seen_time).total_seconds()
+    elapsed = (
+        datetime.now(timezone.utc) - last_seen_time
+    ).total_seconds()
+
     return elapsed < ONLINE_TIMEOUT
+
+
+def validate_config(config):
+    log_level = config["log_level"].upper()
+
+    if log_level not in VALID_LOG_LEVELS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Niveau de log invalide: {config['log_level']}",
+        )
+
+    return {
+        "log_level": log_level,
+        "session_enabled": config["session_enabled"],
+        "ui_enabled": config["ui_enabled"],
+    }
 
 
 @app.on_event("startup")
@@ -227,4 +260,71 @@ def get_terminal_config(terminal_id: str):
         "terminal_id": row["terminal_id"],
         "config_version": row["config_version"],
         "settings": json.loads(row["config_json"]),
+    }
+
+@app.put("/api/v1/terminals/{terminal_id}/config")
+def update_terminal_config(
+    terminal_id: str,
+    config: TerminalConfigUpdate,
+):
+    new_config = validate_config(config.model_dump())
+    updated_at = datetime.now(timezone.utc).isoformat()
+
+    with get_connection() as connection:
+        terminal_row = connection.execute(
+            """
+            SELECT terminal_id
+            FROM terminals
+            WHERE terminal_id = ?
+            """,
+            (terminal_id,),
+        ).fetchone()
+
+        if terminal_row is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Terminal not registered",
+            )
+
+        config_row = connection.execute(
+            """
+            SELECT config_version
+            FROM terminal_config
+            WHERE terminal_id = ?
+            """,
+            (terminal_id,),
+        ).fetchone()
+
+        if config_row is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Configuration not found",
+            )
+
+        new_version = config_row["config_version"] + 1
+
+        connection.execute(
+            """
+            UPDATE terminal_config
+            SET config_version = ?,
+                config_json = ?,
+                updated_at = ?
+            WHERE terminal_id = ?
+            """,
+            (
+                new_version,
+                json.dumps(new_config),
+                updated_at,
+                terminal_id,
+            ),
+        )
+
+        connection.commit()
+
+    return {
+        "status": "updated",
+        "terminal_id": terminal_id,
+        "config_version": new_version,
+        "settings": new_config,
+        "updated_at": updated_at,
     }
