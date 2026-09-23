@@ -132,6 +132,33 @@ def save_local_config(config):
     )
 
 
+def apply_config(config):
+    settings = config.get("settings", {})
+    log_level = settings.get("log_level", "INFO").upper()
+
+    valid_levels = {
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    }
+
+    if log_level not in valid_levels:
+        log.warning(
+            "Niveau de log invalide: %s, utilisation de INFO",
+            log_level,
+        )
+        log_level = "INFO"
+
+    log.setLevel(getattr(logging, log_level))
+
+    log.info(
+        "Configuration appliquée: log_level=%s",
+        log_level,
+    )
+
+
 def heartbeat(server_url, terminal_id):
     request = urllib.request.Request(
         f"{server_url}/api/v1/terminals/{terminal_id}/heartbeat",
@@ -184,6 +211,7 @@ def main():
     try:
         config = get_remote_config(server_url, identity)
         save_local_config(config)
+        apply_config(config)
     except urllib.error.URLError as error:
         log.error("Configuration retrieval failed: %s", error)
     except Exception as error:
