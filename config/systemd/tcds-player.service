@@ -1,0 +1,15 @@
+[Unit]
+Description=TCDS Video Player
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tcds
+Group=tcds
+ExecStart=/usr/bin/python3 /opt/tcds/player/tcds_player.py /opt/tcds/media/video.mp4
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
