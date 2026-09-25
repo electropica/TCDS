@@ -32,6 +32,7 @@ def init_database():
                 architecture TEXT NOT NULL,
                 client_version TEXT NOT NULL,
                 last_seen TEXT NOT NULL,
+                temperature REAL,
                 online INTEGER NOT NULL DEFAULT 1
             )
             """
@@ -50,5 +51,17 @@ def init_database():
             )
             """
         )
+
+        connection.execute("""\n            CREATE TABLE IF NOT EXISTS media (\n                media_id INTEGER PRIMARY KEY AUTOINCREMENT,\n                filename TEXT NOT NULL,\n                path TEXT NOT NULL,\n                created_at TEXT NOT NULL\n            )\n            """)
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS terminal_commands (
+                command_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                terminal_id TEXT NOT NULL,
+                command TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                executed INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (terminal_id) REFERENCES terminals(terminal_id)
+            )
+            """)
 
         connection.commit()

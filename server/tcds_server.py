@@ -3,7 +3,8 @@ import json
 
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from server.database import get_connection, init_database
@@ -26,9 +27,12 @@ VALID_LOG_LEVELS = {
 }
 
 app = FastAPI(
+
+
     title="TCDS Server",
     version=VERSION,
 )
+websocket_clients = {}
 
 
 class TerminalRegistration(BaseModel):
@@ -74,6 +78,18 @@ def validate_config(config):
 @app.on_event("startup")
 def startup():
     init_database()
+
+
+@app.websocket("/ws/{terminal_id}")
+async def websocket_endpoint(websocket: WebSocket, terminal_id: str):
+    await websocket.accept()
+    websocket_clients[terminal_id] = websocket
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        if websocket_clients.get(terminal_id) is websocket:
+            del websocket_clients[terminal_id]
 
 
 @app.get("/api/v1/status")
@@ -328,3 +344,47 @@ def update_terminal_config(
         "settings": new_config,
         "updated_at": updated_at,
     }
+
+@app.post("/api/v1/terminals/{terminal_id}/player/start")
+async def start_player(terminal_id: str):
+    websocket = websocket_clients.get(terminal_id)
+    if websocket is not None:
+        await websocket.send_json({"command": "start"})
+    return {"status": "sent", "terminal_id": terminal_id, "command": "start"}
+
+
+@app.post("/api/v1/terminals/{terminal_id}/player/stop")
+async def stop_player(terminal_id: str):
+    websocket = websocket_clients.get(terminal_id)
+    if websocket is not None:
+        await websocket.send_json({"command": "stop"})
+    return {"status": "sent", "terminal_id": terminal_id, "command": "stop"}
+ 
+@app.get("/", response_class=HTMLResponse)
+def web_interface():
+    return """<!doctype html>
+<html>
+<head><title>TCDS</title></head>
+<body>
+<h1>TCDS</h1>
+<div id="terminals">Chargement...</div>
+<script>
+fetch("/api/v1/terminals").then(r => r.json()).then(d => {
+  document.getElementById("terminals").innerHTML = d.terminals.map(t =>
+    `<p><b>${t.terminal_id}</b> - ${t.hostname} -
+    ${t.online ? "En ligne" : "Hors ligne"} -
+    ${t.temperature !== null ? t.temperature + " °C" : "Temp. inconnue"}
+    <button data-command="start" data-id="${t.terminal_id}">START</button>
+    <button data-command="stop" data-id="${t.terminal_id}">STOP</button></p>`
+  ).join("");
+});
+document.addEventListener("click", e => {
+  const button = e.target.closest("button[data-command]");
+  if (!button) return;
+  fetch(`/api/v1/terminals/${button.dataset.id}/player/${button.dataset.command}`, {
+    method: "POST"
+  }).then(r => r.json()).then(console.log).catch(console.error);
+});
+</script>
+</body>
+</html>"""

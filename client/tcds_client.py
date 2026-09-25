@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 
+import asyncio
 import configparser
 import json
+import websockets
 import logging
 import platform
 import socket
 import subprocess
 import sys
 import time
+import threading
 import urllib.error
 import urllib.request
 
@@ -198,6 +201,20 @@ def heartbeat(server_url, terminal_id):
     return body
 
 
+async def websocket_loop(server_url, terminal_id):
+    websocket_url = server_url.replace("http://", "ws://").replace("https://", "wss://")
+    websocket_url = f"{websocket_url}/ws/{terminal_id}"
+    log.info("Connexion WebSocket: %s", websocket_url)
+    async with websockets.connect(websocket_url) as websocket:
+        while True:
+            message = json.loads(await websocket.recv())
+            command = message.get("command")
+            if command == "start":
+                subprocess.run(["sudo", "systemctl", "start", "tcds-player.service"], check=False)
+            elif command == "stop":
+                subprocess.run(["sudo", "systemctl", "stop", "tcds-player.service"], check=False)
+
+
 def main():
     hostname = socket.gethostname()
     identity = get_identity()
@@ -248,6 +265,12 @@ def main():
         log.error("Configuration retrieval failed: %s", error)
     except Exception as error:
         log.error("Configuration retrieval failed: %s", error)
+
+    websocket_thread = threading.Thread(
+        target=lambda: asyncio.run(websocket_loop(server_url, identity)),
+        daemon=True,
+    )
+    websocket_thread.start()
 
     while True:
         time.sleep(HEARTBEAT_INTERVAL)
