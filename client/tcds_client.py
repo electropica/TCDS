@@ -123,6 +123,7 @@ def download_media(server_url, filename):
     url = f"{server_url}/api/v1/media/{filename}"
     destination = f"/opt/tcds/media/{filename}"
     urllib.request.urlretrieve(url, destination)
+    log.info("Média téléchargé: %s", destination)
     return destination
 
 
@@ -278,7 +279,8 @@ def main():
         log.info("Médias disponibles: %s", get_media_list(server_url))
         selected_media = config.get("settings", {}).get("media")
         if selected_media:
-            download_media(server_url, selected_media)
+            media_path = download_media(server_url, selected_media)
+            subprocess.run(["sudo", "systemctl", "stop", "tcds-player.service"], check=False)
         save_local_config(config)
         apply_config(config)
         config_version = config.get("config_version")
