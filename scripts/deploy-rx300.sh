@@ -57,7 +57,7 @@ $SSH "$TARGET" '
     sudo chown root:root /opt/tcds/player/tcds_player.py
     sudo chmod 755 /opt/tcds/player/tcds_player.py
     sudo chmod 644 /etc/systemd/system/tcds-player.service
-    sudo systemctl enable --now tcds-player.service
+    sudo systemctl start tcds-player.service
 
     sudo chmod 755 /opt/tcds/core/tcds_core.py
     sudo chmod 755 /opt/tcds/client/tcds_client.py
@@ -66,8 +66,8 @@ $SSH "$TARGET" '
     sudo chmod 755 /opt/tcds/identity/identity.py
 
     sudo systemctl daemon-reload
-    sudo systemctl enable --now tcds-client.service
-    sudo systemctl restart tcds-client.service
+    sudo systemctl start tcds-client.service
+    sudo systemctl start tcds-client.service
 
 '
 
