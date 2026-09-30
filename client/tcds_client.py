@@ -114,6 +114,11 @@ def register(
     log.info("Registration OK: %s", body)
 
 
+def get_media_list(server_url):
+    with urllib.request.urlopen(f"{server_url}/api/v1/media", timeout=10) as response:
+        return json.loads(response.read().decode())["media"]
+
+
 def get_remote_config(server_url, terminal_id):
     request = urllib.request.Request(
         f"{server_url}/api/v1/terminals/{terminal_id}/config",
@@ -263,6 +268,7 @@ def main():
 
     try:
         config = get_remote_config(server_url, identity)
+        log.info("Médias disponibles: %s", get_media_list(server_url))
         save_local_config(config)
         apply_config(config)
         config_version = config.get("config_version")
@@ -294,6 +300,7 @@ def main():
                 )
 
                 config = get_remote_config(server_url, identity)
+                log.info("Médias disponibles: %s", get_media_list(server_url))
                 save_local_config(config)
                 apply_config(config)
                 config_version = config.get("config_version")
