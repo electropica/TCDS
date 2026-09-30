@@ -3,6 +3,7 @@ import json
 
 from datetime import datetime, timezone
 
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -11,6 +12,7 @@ from server.database import get_connection, init_database
 
 VERSION = "0.1.0"
 ONLINE_TIMEOUT = 90
+MEDIA_DIR = Path("/opt/tcds/media")
 
 DEFAULT_CONFIG = {
     "log_level": "INFO",
@@ -91,6 +93,19 @@ async def websocket_endpoint(websocket: WebSocket, terminal_id: str):
         if websocket_clients.get(terminal_id) is websocket:
             del websocket_clients[terminal_id]
 
+
+@app.get("/api/v1/media")
+def list_media():
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    return {"media": [p.name for p in MEDIA_DIR.iterdir() if p.is_file()]}
+
+@app.get("/api/v1/media/{filename}")
+def download_media(filename: str):
+    from fastapi.responses import FileResponse
+    path = MEDIA_DIR / filename
+    if not path.is_file() or path.parent != MEDIA_DIR:
+        raise HTTPException(status_code=404, detail="Media introuvable")
+    return FileResponse(path)
 
 @app.get("/api/v1/status")
 def status():
