@@ -4,7 +4,6 @@ import sys
 import gi
 
 gi.require_version("Gst", "1.0")
-MEDIA_FILE = config.get("player", "media")
 
 def play(filename):
     pipeline = Gst.parse_launch(
