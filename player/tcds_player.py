@@ -4,6 +4,8 @@ import sys
 import gi
 
 gi.require_version("Gst", "1.0")
+from gi.repository import Gst
+Gst.init(None)
 
 def play(filename):
     pipeline = Gst.parse_launch(
