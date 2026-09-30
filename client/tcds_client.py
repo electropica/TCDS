@@ -276,8 +276,9 @@ def main():
     try:
         config = get_remote_config(server_url, identity)
         log.info("Médias disponibles: %s", get_media_list(server_url))
-        if get_media_list(server_url):
-            download_media(server_url, get_media_list(server_url)[0])
+        selected_media = config.get("settings", {}).get("media")
+        if selected_media:
+            download_media(server_url, selected_media)
         save_local_config(config)
         apply_config(config)
         config_version = config.get("config_version")
