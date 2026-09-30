@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import configparser
 
 import sys
 import gi
@@ -7,6 +8,9 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst
 
 Gst.init(None)
+config = configparser.ConfigParser()
+config.read("/opt/tcds/config/tcds-player.conf")
+MEDIA_FILE = config.get("player", "media")
 
 def play(filename):
     pipeline = Gst.parse_launch(
@@ -38,8 +42,4 @@ def play(filename):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(f"Usage: {sys.argv[0]} fichier.mp4")
-        sys.exit(1)
-
-    play(sys.argv[1])
+    play(MEDIA_FILE)

@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=tcds
 Group=tcds
-ExecStart=/usr/bin/python3 /opt/tcds/player/tcds_player.py /opt/tcds/media/video.mp4
+ExecStart=/usr/bin/python3 /opt/tcds/player/tcds_player.py
 Restart=on-failure
 RestartSec=5
 

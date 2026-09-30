@@ -32,6 +32,7 @@ $SCP client/tcds_client.py "$TARGET:/tmp/tcds_client.py"
 
 echo "[TCDS] Copie du Player..."
 $SCP player/tcds_player.py "$TARGET:/tmp/tcds_player.py"
+$SCP config/tcds-player.conf "$TARGET:/tmp/tcds-player.conf"
 $SCP config/systemd/tcds-player.service "$TARGET:/tmp/tcds-player.service"
 echo "[TCDS] Copie du service systemd Client..."
 $SCP config/systemd/tcds-client.service "$TARGET:/tmp/tcds-client.service"
@@ -44,6 +45,7 @@ $SSH "$TARGET" '
     sudo mv /tmp/tcds_core.py /opt/tcds/core/tcds_core.py
     sudo mv /tmp/tcds_client.py /opt/tcds/client/tcds_client.py
     sudo mv /tmp/tcds_player.py /opt/tcds/player/tcds_player.py
+    sudo mv /tmp/tcds-player.conf /opt/tcds/config/tcds-player.conf
     sudo mv /tmp/tcds-player.service /etc/systemd/system/tcds-player.service
     sudo mv /tmp/tcds-client.service /etc/systemd/system/tcds-client.service
 
