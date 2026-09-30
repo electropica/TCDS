@@ -119,6 +119,13 @@ def get_media_list(server_url):
         return json.loads(response.read().decode())["media"]
 
 
+def download_media(server_url, filename):
+    url = f"{server_url}/api/v1/media/{filename}"
+    destination = f"/opt/tcds/media/{filename}"
+    urllib.request.urlretrieve(url, destination)
+    return destination
+
+
 def get_remote_config(server_url, terminal_id):
     request = urllib.request.Request(
         f"{server_url}/api/v1/terminals/{terminal_id}/config",
