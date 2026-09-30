@@ -18,6 +18,7 @@ DEFAULT_CONFIG = {
     "log_level": "INFO",
     "session_enabled": False,
     "ui_enabled": False,
+    "media": None,
 }
 
 VALID_LOG_LEVELS = {
@@ -50,6 +51,7 @@ class TerminalConfigUpdate(BaseModel):
     log_level: str
     session_enabled: bool
     ui_enabled: bool
+    media: str | None = None
 
 
 def is_terminal_online(last_seen):
@@ -74,6 +76,7 @@ def validate_config(config):
         "log_level": log_level,
         "session_enabled": config["session_enabled"],
         "ui_enabled": config["ui_enabled"],
+        "media": config.get("media"),
     }
 
 
