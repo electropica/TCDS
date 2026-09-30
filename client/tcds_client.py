@@ -204,16 +204,21 @@ def heartbeat(server_url, terminal_id):
 async def websocket_loop(server_url, terminal_id):
     websocket_url = server_url.replace("http://", "ws://").replace("https://", "wss://")
     websocket_url = f"{websocket_url}/ws/{terminal_id}"
-    log.info("Connexion WebSocket: %s", websocket_url)
-    async with websockets.connect(websocket_url) as websocket:
-        while True:
-            message = json.loads(await websocket.recv())
-            command = message.get("command")
-            if command == "start":
-                subprocess.run(["sudo", "systemctl", "start", "tcds-player.service"], check=False)
-            elif command == "stop":
-                subprocess.run(["sudo", "systemctl", "stop", "tcds-player.service"], check=False)
 
+    while True:
+        try:
+            log.info("Connexion WebSocket: %s", websocket_url)
+            async with websockets.connect(websocket_url) as websocket:
+                while True:
+                    message = json.loads(await websocket.recv())
+                    command = message.get("command")
+                    if command == "start":
+                        subprocess.run(["sudo", "systemctl", "start", "tcds-player.service"], check=False)
+                    elif command == "stop":
+                        subprocess.run(["sudo", "systemctl", "stop", "tcds-player.service"], check=False)
+        except Exception as exc:
+            log.warning("WebSocket déconnecté: %s", exc)
+            await asyncio.sleep(5)
 
 def main():
     hostname = socket.gethostname()
