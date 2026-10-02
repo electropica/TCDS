@@ -66,8 +66,7 @@ $SSH "$TARGET" '
     sudo chmod 755 /opt/tcds/identity/identity.py
 
     sudo systemctl daemon-reload
-    sudo systemctl start tcds-client.service
-    sudo systemctl start tcds-client.service
+    sudo systemctl restart tcds-client.service
 
 '
 
