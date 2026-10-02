@@ -280,7 +280,8 @@ def main():
         selected_media = config.get("settings", {}).get("media")
         if selected_media:
             media_path = download_media(server_url, selected_media)
-            subprocess.run(["sudo", "systemctl", "stop", "tcds-player.service"], check=False)
+            subprocess.run(["ln", "-sfn", media_path, "/opt/tcds/media/current.mp4"], check=False)
+            subprocess.run(["sudo", "systemctl", "restart", "tcds-player.service"], check=False)
         save_local_config(config)
         apply_config(config)
         config_version = config.get("config_version")
@@ -313,6 +314,11 @@ def main():
 
                 config = get_remote_config(server_url, identity)
                 log.info("Médias disponibles: %s", get_media_list(server_url))
+                selected_media = config.get("settings", {}).get("media")
+                if selected_media:
+                    download_media(server_url, selected_media)
+                    subprocess.run(["ln", "-sfn", f"/opt/tcds/media/{selected_media}", "/opt/tcds/media/current.mp4"], check=False)
+                    subprocess.run(["sudo", "systemctl", "restart", "tcds-player.service"], check=False)
                 save_local_config(config)
                 apply_config(config)
                 config_version = config.get("config_version")
