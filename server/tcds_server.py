@@ -3,6 +3,7 @@ import json
 
 from datetime import datetime, timezone
 
+from fastapi import UploadFile, File
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -102,6 +103,14 @@ def list_media():
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     return {"media": [p.name for p in MEDIA_DIR.iterdir() if p.is_file()]}
 
+@app.post("/api/v1/media")
+async def upload_media(file: UploadFile = File(...)):
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    path = MEDIA_DIR / Path(file.filename).name
+    with path.open("wb") as destination:
+        while chunk := await file.read(1024 * 1024):
+            destination.write(chunk)
+    return {"status": "uploaded", "filename": path.name}
 @app.get("/api/v1/media/{filename}")
 def download_media(filename: str):
     from fastapi.responses import FileResponse
@@ -109,6 +118,15 @@ def download_media(filename: str):
     if not path.is_file() or path.parent != MEDIA_DIR:
         raise HTTPException(status_code=404, detail="Media introuvable")
     return FileResponse(path)
+
+@app.delete("/api/v1/media/{filename}")
+def delete_media(filename: str):
+    path = MEDIA_DIR / filename
+    if not path.is_file() or path.parent != MEDIA_DIR:
+        raise HTTPException(status_code=404, detail="Media introuvable")
+    path.unlink()
+    return {"status": "deleted", "filename": filename}
+
 
 @app.get("/api/v1/status")
 def status():
