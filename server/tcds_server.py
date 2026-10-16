@@ -116,7 +116,7 @@ def process_uploaded_media(temp_path, filename):
                 "ffprobe", "-v", "error",
                 "-select_streams", "v:0",
                 "-show_entries",
-                "stream=codec_name,profile,width,height,pix_fmt",
+		"stream=codec_name,profile,width,height,pix_fmt,level",
                 "-of", "json", str(temp_path),
             ],
             capture_output=True,
@@ -127,6 +127,7 @@ def process_uploaded_media(temp_path, filename):
         video = json.loads(probe.stdout)["streams"][0]
         compatible = (
             video.get("codec_name") == "h264"
+	    and video.get("level", 0) <= 42
             and video.get("profile") == "High"
             and video.get("pix_fmt") == "yuv420p"
             and video.get("width", 0) <= 1920
@@ -142,18 +143,25 @@ def process_uploaded_media(temp_path, filename):
         temp_output = temp_path.parent / final_path.name
 
         subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", str(temp_path),
-                "-c:v", "libx264",
-                "-profile:v", "high",
-                "-pix_fmt", "yuv420p",
-                "-vf", "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease",
-                "-c:a", "aac",
-                "-b:a", "128k",
-                "-movflags", "+faststart",
-                str(temp_output),
-            ],
+	[
+	    "ffmpeg", "-y",
+	    "-i", str(temp_path),
+	    "-map", "0:v:0",
+	    "-map", "0:a?",
+	    "-vf", "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease,fps=30",
+	    "-c:v", "libx264",
+	    "-preset", "medium",
+	    "-profile:v", "high",
+	    "-level:v", "4.0",
+	    "-pix_fmt", "yuv420p",
+	    "-b:v", "8M",
+	    "-maxrate", "10M",
+	    "-bufsize", "16M",
+	    "-c:a", "aac",
+	    "-b:a", "128k",
+	    "-movflags", "+faststart",
+	    str(temp_output),
+	],
             check=True,
         )
         shutil.move(str(temp_output), final_path)
