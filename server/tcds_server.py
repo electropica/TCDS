@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import json
+import shutil
+import subprocess
+import tempfile
 
 from datetime import datetime, timezone
 
-from fastapi import UploadFile, File
+from fastapi import UploadFile, File, BackgroundTasks
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -103,14 +106,88 @@ def list_media():
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     return {"media": [p.name for p in MEDIA_DIR.iterdir() if p.is_file()]}
 
+def process_uploaded_media(temp_path, filename):
+    temp_path = Path(temp_path)
+    final_path = MEDIA_DIR / filename
+
+    try:
+        probe = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries",
+                "stream=codec_name,profile,width,height,pix_fmt",
+                "-of", "json", str(temp_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        video = json.loads(probe.stdout)["streams"][0]
+        compatible = (
+            video.get("codec_name") == "h264"
+            and video.get("profile") == "High"
+            and video.get("pix_fmt") == "yuv420p"
+            and video.get("width", 0) <= 1920
+            and video.get("height", 0) <= 1080
+            and Path(filename).suffix.lower() == ".mp4"
+        )
+
+        if compatible:
+            shutil.move(str(temp_path), final_path)
+            return
+
+        final_path = MEDIA_DIR / f"{Path(filename).stem}_tcds.mp4"
+        temp_output = temp_path.parent / final_path.name
+
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-i", str(temp_path),
+                "-c:v", "libx264",
+                "-profile:v", "high",
+                "-pix_fmt", "yuv420p",
+                "-vf", "scale='min(1920,iw)':'min(1080,ih)':force_original_aspect_ratio=decrease",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-movflags", "+faststart",
+                str(temp_output),
+            ],
+            check=True,
+        )
+        shutil.move(str(temp_output), final_path)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
 @app.post("/api/v1/media")
-async def upload_media(file: UploadFile = File(...)):
+async def upload_media(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+):
     MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-    path = MEDIA_DIR / Path(file.filename).name
-    with path.open("wb") as destination:
+
+    filename = Path(file.filename).name
+    temp_dir = Path(tempfile.mkdtemp(prefix="tcds-upload-", dir="/tmp"))
+    temp_path = temp_dir / filename
+
+    with temp_path.open("wb") as destination:
         while chunk := await file.read(1024 * 1024):
             destination.write(chunk)
-    return {"status": "uploaded", "filename": path.name}
+
+    background_tasks.add_task(
+        process_uploaded_media,
+        temp_path,
+        filename,
+    )
+
+    return {
+        "status": "uploaded",
+        "filename": filename,
+        "processing": True,
+    }
+
 @app.get("/api/v1/media/{filename}")
 def download_media(filename: str):
     from fastapi.responses import FileResponse
@@ -403,6 +480,7 @@ def web_interface():
 <head><title>TCDS</title></head>
 <body>
 <h1>TCDS</h1>
+<h2>Médias</h2><div id="media">Chargement...</div><input type="file" id="mediaFile"><button onclick="uploadMedia()">Envoyer</button>
 <div id="terminals">Chargement...</div>
 <script>
 fetch("/api/v1/terminals").then(r => r.json()).then(d => {
@@ -421,6 +499,8 @@ document.addEventListener("click", e => {
     method: "POST"
   }).then(r => r.json()).then(console.log).catch(console.error);
 });
+function playMedia(m){fetch("/api/v1/terminals/TCDS-5A3763/config").then(r=>r.json()).then(c=>{c.settings.media=m;return fetch("/api/v1/terminals/TCDS-5A3763/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(c.settings)})}).then(()=>loadMedia())}
+function loadMedia(){fetch("/api/v1/media").then(r=>r.json()).then(d=>{document.getElementById("media").innerHTML=d.media.map(m=>`<p>${m} <button onclick="playMedia(\x27${m}\x27)">Lire</button> <button onclick="deleteMedia(\x27${m}\x27)">Supprimer</button></p>`).join("")})} function uploadMedia(){const f=document.getElementById("mediaFile").files[0];if(!f)return;const d=new FormData();d.append("file",f);fetch("/api/v1/media",{method:"POST",body:d}).then(()=>{loadMedia();let n=0;const t=setInterval(()=>{loadMedia();if(++n>=60)clearInterval(t)},2000)})} function deleteMedia(m){fetch("/api/v1/media/"+encodeURIComponent(m),{method:"DELETE"}).then(()=>loadMedia())} loadMedia();
 </script>
 </body>
 </html>"""
