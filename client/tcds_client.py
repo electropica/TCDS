@@ -3,6 +3,7 @@
 import asyncio
 import configparser
 import json
+import os
 import websockets
 import logging
 import platform
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import time
 import threading
+import urllib.parse
 import urllib.error
 import urllib.request
 
@@ -22,6 +24,7 @@ VERSION = "0.1.0"
 
 CONFIG_FILE = "/opt/tcds/config/tcds-client.conf"
 LOCAL_CONFIG_FILE = "/opt/tcds/config/tcds-config.json"
+PDF_PLAYLIST_FILE = "/opt/tcds/config/tcds-playlist.json"
 HEARTBEAT_INTERVAL = 30
 
 logging.basicConfig(
@@ -127,6 +130,26 @@ def download_media(server_url, filename):
     return destination
 
 
+def download_pdf_playlist(server_url, filename, page_duration):
+    manifest_url = f"{server_url}/api/v1/media/{filename}/manifest"
+    with urllib.request.urlopen(manifest_url, timeout=10) as response:
+        manifest = json.loads(response.read().decode())
+
+    pdf_dir = f"/opt/tcds/media/pdf/{filename.rsplit('.', 1)[0]}"
+    subprocess.run(["mkdir", "-p", pdf_dir], check=True)
+    items = []
+    for index, page in enumerate(manifest["pages"], start=1):
+        destination = f"{pdf_dir}/page-{index:04d}.jpg"
+        url = f"{server_url}/api/v1/media/{urllib.parse.quote(filename)}/pages/{urllib.parse.quote(page)}"
+        urllib.request.urlretrieve(url, destination)
+        items.append({"path": destination, "duration": page_duration})
+
+    with open(PDF_PLAYLIST_FILE, "w", encoding="utf-8") as file:
+        json.dump(items, file, indent=2)
+        file.write("\n")
+    log.info("Playlist PDF téléchargée: %d page(s)", len(items))
+
+
 def get_remote_config(server_url, terminal_id):
     request = urllib.request.Request(
         f"{server_url}/api/v1/terminals/{terminal_id}/config",
@@ -191,6 +214,24 @@ def apply_config(config):
 
     log.setLevel(getattr(logging, log_level))
 
+    settings = config.get("settings", {})
+    media = settings.get("media")
+    media_kind = settings.get("media_kind", "video")
+    if media and media_kind == "pdf":
+        download_pdf_playlist(
+            load_config(), media,
+            int(settings.get("pdf_page_duration", 10)),
+        )
+        subprocess.run(["sudo", "systemctl", "restart", "tcds-player.service"], check=False)
+    elif media and media_kind == "video":
+        media_path = download_media(load_config(), media)
+        subprocess.run(["ln", "-sfn", media_path, "/opt/tcds/media/current.mp4"], check=False)
+        try:
+            os.unlink(PDF_PLAYLIST_FILE)
+        except FileNotFoundError:
+            pass
+        subprocess.run(["sudo", "systemctl", "restart", "tcds-player.service"], check=False)
+
     log.info(
         "Configuration appliquée: log_level=%s",
         log_level,
@@ -229,6 +270,9 @@ async def websocket_loop(server_url, terminal_id):
                         subprocess.run(["sudo", "systemctl", "start", "tcds-player.service"], check=False)
                     elif command == "stop":
                         subprocess.run(["sudo", "systemctl", "stop", "tcds-player.service"], check=False)
+                    elif command == "poweroff":
+                        log.warning("Extinction demandée pour le terminal %s", terminal_id)
+                        subprocess.run(["sudo", "systemctl", "poweroff"], check=False)
         except Exception as exc:
             log.warning("WebSocket déconnecté: %s", exc)
             await asyncio.sleep(5)
@@ -278,10 +322,9 @@ def main():
         config = get_remote_config(server_url, identity)
         log.info("Médias disponibles: %s", get_media_list(server_url))
         selected_media = config.get("settings", {}).get("media")
-        if selected_media:
+        if selected_media and config.get("settings", {}).get("media_kind", "video") == "video":
             media_path = download_media(server_url, selected_media)
             subprocess.run(["ln", "-sfn", media_path, "/opt/tcds/media/current.mp4"], check=False)
-            subprocess.run(["sudo", "systemctl", "restart", "tcds-player.service"], check=False)
         save_local_config(config)
         apply_config(config)
         config_version = config.get("config_version")
@@ -315,10 +358,9 @@ def main():
                 config = get_remote_config(server_url, identity)
                 log.info("Médias disponibles: %s", get_media_list(server_url))
                 selected_media = config.get("settings", {}).get("media")
-                if selected_media:
+                if selected_media and config.get("settings", {}).get("media_kind", "video") == "video":
                     download_media(server_url, selected_media)
                     subprocess.run(["ln", "-sfn", f"/opt/tcds/media/{selected_media}", "/opt/tcds/media/current.mp4"], check=False)
-                    subprocess.run(["sudo", "systemctl", "restart", "tcds-player.service"], check=False)
                 save_local_config(config)
                 apply_config(config)
                 config_version = config.get("config_version")
